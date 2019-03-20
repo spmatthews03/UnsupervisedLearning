@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import sys
 
@@ -22,10 +23,13 @@ def run_experiment(experiment_details, experiment, timing_key, dim, skiprerun, v
 
         if not skiprerun:
             logger.info("Running {} experiment: {} ({})".format(timing_key, details.ds_readable_name, dim))
+            logger.info(" Details: {}".format(details))
             exp.perform()
 
         if dim is not None:
             logger.info("Running with dimension {}".format(dim))
+            if skiprerun:
+                logger.info(" Details: {}".format(details))
             exp.perform_cluster(dim)
     t_d = datetime.now() - t
     timings[timing_key] = t_d.seconds
@@ -40,8 +44,8 @@ if __name__ == '__main__':
     parser.add_argument('--skiprerun', action='store_true',
                         help='If true, do not re-run the main experiment before clustering '
                              '(This MUST be used with --dim and a specific experiment)')
-    parser.add_argument('--batting', action='store_true', help='Run only Batting')
-    parser.add_argument('--pitching', action='store_true', help='Run only Pitching')
+    parser.add_argument('--dataset1', action='store_true', help='Run only data set 1')
+    parser.add_argument('--dataset2', action='store_true', help='Run only data set 2')
     parser.add_argument('--benchmark', action='store_true', help='Run the benchmark experiments')
     parser.add_argument('--ica', action='store_true', help='Run the ICA experiments')
     parser.add_argument('--pca', action='store_true', help='Run the PCA experiments')
@@ -67,8 +71,8 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(1)
 
-    if args.batting and args.pitching:
-        logger.error("Can only specify one of '--batting' or '--pitching', not both")
+    if args.dataset1 and args.dataset2:
+        logger.error("Can only specify one of '--dataset1' or '--dataset2', not both")
         parser.print_help()
         sys.exit(1)
 
@@ -83,33 +87,27 @@ if __name__ == '__main__':
     logger.info("----------")
 
     datasets = []
-    batting_details = {
-        'data': loader.BattingBaseballData(verbose=verbose, seed=seed),
-        'name': 'batting_data',
-        'readable_name': 'Batting Stats',
+    dataset1_details = {
+            'data': loader.BattingBaseballData(verbose=verbose, seed=seed),
+            'name': 'batting_data',
+            'readable_name': 'Batting Stats',
+            'best_nn_params': {'NN__activation': ['relu'], 'NN__alpha': [.1],
+                               'NN__hidden_layer_sizes': [(14,14,14)], 'NN__learning_rate_init': [0.032]}
+        }
+    dataset2_details = {
+            'data': loader.PitchingBaseballData(verbose=verbose, seed=seed),
+            'name': 'pitching_data',
+            'readable_name': 'Pitching Stats',
+            'best_nn_params': {'NN__activation': ['relu'], 'NN__alpha': [.001],
+                               'NN__hidden_layer_sizes': [(22, 22)], 'NN__learning_rate_init': [0.128]}
     }
-    pitching_details = {
-        'data': loader.PitchingBaseballData(verbose=verbose, seed=seed),
-        'name': 'pitching_data',
-        'readable_name': 'Pitching Stats',
-    }
-    # statlog_details = {
-    #         'data': loader.StatlogVehicleData(verbose=verbose, seed=seed),
-    #         'name': 'statlog_vehicle',
-    #         'readable_name': 'Statlog Vehicle',
-    #     }
-    # htru2_details = {
-    #         'data': loader.HTRU2Data(verbose=verbose, seed=seed),
-    #         'name': 'htru2',
-    #         'readable_name': 'HTRU2',
-    #     }
-    if args.batting:
-        datasets.append(batting_details)
-    elif args.pitching:
-        datasets.append(pitching_details)
-    elif not args.batting and not args.pitching:
-        datasets.append(batting_details)
-        datasets.append(pitching_details)
+    if args.dataset1:
+        datasets.append(dataset1_details)
+    elif args.dataset2:
+        datasets.append(dataset2_details)
+    elif not args.dataset1 and not args.dataset2:
+        datasets.append(dataset1_details)
+        datasets.append(dataset2_details)
 
     experiment_details = []
     for ds in datasets:
@@ -118,7 +116,7 @@ if __name__ == '__main__':
         data.build_train_test_split()
         data.scale_standard()
         experiment_details.append(experiments.ExperimentDetails(
-            data, ds['name'], ds['readable_name'],
+            data, ds['name'], ds['readable_name'], ds['best_nn_params'],
             threads=threads,
             seed=seed
         ))
@@ -140,6 +138,7 @@ if __name__ == '__main__':
         if args.pca or args.all:
             run_experiment(experiment_details, experiments.PCAExperiment, 'PCA', args.dim, args.skiprerun,
                            verbose, timings)
+        # NOTE: These were experimented with but ultimately were not used for this assignment.
         # if args.lda or args.all:
         #     run_experiment(experiment_details, experiments.LDAExperiment, 'LDA', args.dim, args.skiprerun,
         #                    verbose, timings)
